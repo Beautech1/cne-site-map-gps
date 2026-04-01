@@ -135,13 +135,15 @@
     .popup-photo,
     .log-photo {
       display: block;
-      margin-top: 8px;
+      margin: 8px auto 0;
       width: 100%;
       max-width: 180px;
       max-height: 140px;
       object-fit: cover;
+      object-position: center center;
       border-radius: 6px;
       border: 1px solid #d0d7de;
+      background: #f2f4f7;
     }
 
     .panel {
@@ -171,14 +173,25 @@
       justify-content: space-between;
       align-items: center;
       font-weight: bold;
+      position: sticky;
+      top: 0;
+      z-index: 1;
     }
 
     .panel-close-btn {
       border: none;
-      background: transparent;
+      background: rgba(255,255,255,0.16);
       color: #fff;
-      font-size: 18px;
+      font-size: 22px;
+      line-height: 1;
       cursor: pointer;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
     }
 
     .panel-body {
@@ -307,6 +320,34 @@
       padding: 0 14px 14px;
     }
 
+    .popup-close-row {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 6px;
+    }
+
+    .popup-close-btn {
+      border: none;
+      background: #5f6b7a;
+      color: #fff;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      font-size: 18px;
+      line-height: 1;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .export-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
     @media (max-width: 900px) {
       .map-help, .status-bar, .map-toolbar, .filter-bar {
         left: 10px;
@@ -315,6 +356,10 @@
       }
       .panel {
         width: calc(100vw - 20px);
+      }
+      .leaflet-popup-close-button {
+        font-size: 22px !important;
+        padding: 6px 10px 0 0 !important;
       }
     }
   </style>
@@ -329,6 +374,8 @@
     <button class="toolbar-btn" onclick="loadPins(true)">Refresh Pins</button>
     <button class="toolbar-btn" onclick="openPinModalForPending()">Add Pin</button>
     <button class="toolbar-btn secondary" onclick="toggleLogPanel()">View Clear Log</button>
+    <button class="toolbar-btn secondary" onclick="exportClearLogHtml()">Export Clear Log</button>
+    <button class="toolbar-btn secondary" onclick="exportClearLogCsv()">Export CSV Log</button>
     <button class="toolbar-btn secondary" onclick="toggleLegendPanel()">Legend</button>
     <label class="file-label secondary" for="csvInput">Import CSV Pins</label>
     <input class="hidden-input" id="csvInput" type="file" accept=".csv,text/csv" onchange="handleCsvImport(event)">
@@ -353,6 +400,8 @@
         <option value="plumbing">Plumbing</option>
         <option value="safety">Safety</option>
         <option value="vendor">Vendor</option>
+        <option value="labour">Labour</option>
+        <option value="carpentry">Carpentry</option>
       </select>
     </label>
   </div>
@@ -362,8 +411,14 @@
       <span>Cleared Pin Log</span>
       <button class="panel-close-btn" onclick="toggleLogPanel(false)">&times;</button>
     </div>
-    <div class="panel-body" id="logBody">
-      <div class="empty-log">No cleared pins yet.</div>
+    <div class="panel-body">
+      <div class="export-actions">
+        <button class="action-btn secondary" onclick="exportClearLogHtml()">Export clear log with images</button>
+        <button class="action-btn secondary" onclick="exportClearLogCsv()">Export clear log CSV</button>
+      </div>
+      <div id="logBody">
+        <div class="empty-log">No cleared pins yet.</div>
+      </div>
     </div>
   </div>
 
@@ -398,11 +453,20 @@
           <option value="plumbing">Plumbing</option>
           <option value="safety">Safety</option>
           <option value="vendor">Vendor</option>
+          <option value="labour">Labour</option>
+          <option value="carpentry">Carpentry</option>
         </select>
       </label>
       <label>Photo from phone or device
         <input type="file" id="pinPhotoFileInput" accept="image/*" capture="environment">
       </label>
+      <label>Text these numbers
+        <input type="text" id="pinNotifySmsInput" placeholder="Example: 4161111111, 4162222222">
+      </label>
+      <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
+        <input type="checkbox" id="pinNotifySmsNowInput" style="width:auto; margin:0;"> Text contacts now after saving this pin
+      </label>
+      <div class="panel-note">Leave this unchecked if you want to save the pin without opening a text message.</div>
       <div class="panel-note">Images are compressed before upload to keep storage and data use low.</div>
       <img id="pinPhotoPreview" class="log-photo" style="display:none; max-width:120px; margin-top:0;" alt="Photo preview">
       <div class="panel-note" id="pinLocationNote">Click the map first to choose a pin location.</div>
@@ -420,6 +484,7 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1iZnV6ZXR4Zndwb2RqY2pybGdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5ODc0NjgsImV4cCI6MjA5MDU2MzQ2OH0.Q0yFDCzAhE772OaeMaioq8LE_arUINllgSnM4VvZPCI";
     const SUPABASE_TABLE = "pins";
     const SUPABASE_BUCKET = "pin-photos";
+    const APP_LINK = window.location.href.split("#")[0];
 
     const CATEGORY_COLORS = {
       general: "#0078d7",
@@ -428,13 +493,16 @@
       electrical: "#ff8f00",
       plumbing: "#00838f",
       safety: "#6a1b9a",
-      vendor: "#5d4037"
+      vendor: "#5d4037",
+      labour: "#3949ab",
+      carpentry: "#8d6e63"
     };
 
     let supabaseClient = null;
     let realtimeChannel = null;
     let allPins = [];
     let pendingLatLng = null;
+    let previewObjectUrl = null;
 
     const statusBar = document.getElementById("statusBar");
     const logPanel = document.getElementById("logPanel");
@@ -449,6 +517,8 @@
     const pinDescriptionInput = document.getElementById("pinDescriptionInput");
     const pinCategoryInput = document.getElementById("pinCategoryInput");
     const pinPhotoFileInput = document.getElementById("pinPhotoFileInput");
+    const pinNotifySmsInput = document.getElementById("pinNotifySmsInput");
+    const pinNotifySmsNowInput = document.getElementById("pinNotifySmsNowInput");
     const pinPhotoPreview = document.getElementById("pinPhotoPreview");
     const pinLocationNote = document.getElementById("pinLocationNote");
 
@@ -544,11 +614,14 @@
         ? '<img class="popup-photo" src="' + escapeHtml(pin.photo_url) + '" alt="Pin photo" onerror="this.style.display=\'none\'">'
         : "";
 
+      const closeButton = '<div class="popup-close-row"><button class="popup-close-btn" onclick="closeAllMapPopups()" title="Close">&times;</button></div>';
+
       const clearButton = pin.is_cleared
         ? ""
         : (pin.id ? '<br><button class="action-btn clear-btn" onclick="clearPin(' + pin.id + ')">Clear pin</button>' : "");
 
       return (
+        closeButton +
         "<b>" + escapeHtml(pin.title) + "</b>" +
         "<br><small><b>Category:</b> " + escapeHtml(categoryLabel) + "</small>" +
         (pin.description && pin.description.trim() !== "" ? "<br>" + escapeHtml(pin.description) : "") +
@@ -684,9 +757,11 @@
       }
 
       const savedPin = data && data.length ? data[0] : payload;
-      allPins.push({ ...savedPin, category: savedPin.category || "general" });
+      const normalizedPin = { ...savedPin, category: savedPin.category || "general" };
+      allPins.push(normalizedPin);
       applyFilters();
       setStatus("Pin saved.");
+      return normalizedPin;
     }
 
     async function clearPin(pinId) {
@@ -774,6 +849,12 @@
       pinDescriptionInput.value = "";
       pinCategoryInput.value = "general";
       pinPhotoFileInput.value = "";
+      pinNotifySmsInput.value = "";
+      pinNotifySmsNowInput.checked = false;
+      if (previewObjectUrl) {
+        URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrl = null;
+      }
       pinPhotoPreview.style.display = "none";
       pinPhotoPreview.removeAttribute("src");
     }
@@ -817,7 +898,7 @@
           uploadedPhotoUrl = await uploadPhotoFile(photoFile);
         }
 
-        await savePin(
+        const savedPin = await savePin(
           pendingLatLng,
           title,
           pinDescriptionInput.value.trim(),
@@ -825,6 +906,7 @@
           pinCategoryInput.value
         );
 
+        triggerSmsNotification(savedPin);
         closePinModal();
       } catch (error) {
         console.error(error);
@@ -857,13 +939,17 @@
 
     function previewSelectedPhoto() {
       const file = pinPhotoFileInput.files && pinPhotoFileInput.files[0];
+      if (previewObjectUrl) {
+        URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrl = null;
+      }
       if (!file) {
         pinPhotoPreview.style.display = "none";
         pinPhotoPreview.removeAttribute("src");
         return;
       }
-      const objectUrl = URL.createObjectURL(file);
-      pinPhotoPreview.src = objectUrl;
+      previewObjectUrl = URL.createObjectURL(file);
+      pinPhotoPreview.src = previewObjectUrl;
       pinPhotoPreview.style.display = "block";
     }
 
@@ -919,6 +1005,50 @@
       return data.publicUrl;
     }
 
+
+    function splitContactList(value) {
+      return (value || "")
+        .split(/[;,\n]+/)
+        .map(item => item.trim())
+        .filter(Boolean);
+    }
+
+    function cleanPhoneNumber(value) {
+      return (value || "").replace(/[^\d+]/g, "");
+    }
+
+    function buildNotificationMessage(pin) {
+      const categoryLabel = pin.category ? pin.category.charAt(0).toUpperCase() + pin.category.slice(1) : "General";
+      const descriptionLine = pin.description ? `Description: ${pin.description}\n` : "";
+      return `You have a request. Please open the app: ${APP_LINK}\n\nTitle: ${pin.title}\nCategory: ${categoryLabel}\n${descriptionLine}Location: ${Number(pin.lat).toFixed(6)}, ${Number(pin.lng).toFixed(6)}`;
+    }
+
+    function openSmsDraft(recipients, message) {
+      if (!recipients.length) return false;
+      const joinedRecipients = recipients.map(cleanPhoneNumber).filter(Boolean).join(",");
+      if (!joinedRecipients) return false;
+      const smsUrl = `sms:${joinedRecipients}?body=${encodeURIComponent(message)}`;
+      window.open(smsUrl, "_blank");
+      return true;
+    }
+
+    function triggerSmsNotification(pin) {
+      if (!pinNotifySmsNowInput.checked) return;
+      const smsRecipients = splitContactList(pinNotifySmsInput.value).map(cleanPhoneNumber).filter(Boolean);
+      if (!smsRecipients.length) {
+        setStatus("Pin saved. No text draft opened because no phone numbers were entered.");
+        return;
+      }
+      const opened = openSmsDraft(smsRecipients, buildNotificationMessage(pin));
+      if (opened) {
+        if (smsRecipients.length > 1) {
+          setStatus("Pin saved. Text draft opened if your phone/browser supports multiple recipients.");
+        } else {
+          setStatus("Pin saved and text draft opened.");
+        }
+      }
+    }
+
     function parseCsv(text) {
       const rows = text.replace(/\r/g, "").trim().split("\n");
       if (!rows.length) return [];
@@ -932,6 +1062,151 @@
         });
         return record;
       });
+    }
+
+
+    function closeAllMapPopups() {
+      map.closePopup();
+    }
+
+    function formatCategoryLabel(category) {
+      const value = category || "general";
+      return value.charAt(0).toUpperCase() + value.slice(1);
+    }
+
+    async function fetchImageAsDataUrl(url) {
+      if (!url) return null;
+      try {
+        const response = await fetch(url, { mode: "cors" });
+        if (!response.ok) return url;
+        const blob = await response.blob();
+        return await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error("Could not read exported image."));
+          reader.onloadend = () => resolve(reader.result);
+          reader.readAsDataURL(blob);
+        });
+      } catch (error) {
+        console.warn("Could not inline exported image:", error);
+        return url;
+      }
+    }
+
+
+    function csvEscape(value) {
+      const text = value == null ? "" : String(value);
+      if (/[",\n]/.test(text)) {
+        return '"' + text.replace(/"/g, '""') + '"';
+      }
+      return text;
+    }
+
+    function exportClearLogCsv() {
+      const logPins = allPins.filter(pin => pin.is_cleared);
+      if (!logPins.length) {
+        alert("There are no cleared pins to export yet.");
+        return;
+      }
+
+      setStatus("Preparing CSV log export...");
+
+      const headers = [
+        "title",
+        "description",
+        "category",
+        "lat",
+        "lng",
+        "created_at",
+        "cleared_at",
+        "photo_url"
+      ];
+
+      const lines = [
+        headers.join(","),
+        ...logPins.map(pin => [
+          csvEscape(pin.title),
+          csvEscape(pin.description || ""),
+          csvEscape(pin.category || "general"),
+          csvEscape(Number(pin.lat).toFixed(6)),
+          csvEscape(Number(pin.lng).toFixed(6)),
+          csvEscape(pin.created_at ? new Date(pin.created_at).toISOString() : ""),
+          csvEscape(pin.cleared_at ? new Date(pin.cleared_at).toISOString() : ""),
+          csvEscape(pin.photo_url || "")
+        ].join(","))
+      ];
+
+      const csv = "\uFEFF" + lines.join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+      a.href = url;
+      a.download = `cne-clear-log-${stamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStatus("CSV log exported.");
+    }
+
+    async function exportClearLogHtml() {
+      const logPins = allPins.filter(pin => pin.is_cleared);
+      if (!logPins.length) {
+        alert("There are no cleared pins to export yet.");
+        return;
+      }
+
+      setStatus("Preparing clear log export...");
+
+      const rows = await Promise.all(logPins.map(async pin => ({
+        ...pin,
+        export_photo_src: pin.photo_url ? await fetchImageAsDataUrl(pin.photo_url) : null
+      })));
+
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CNE Clear Pin Log Export</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 24px; color: #1f2933; }
+h1 { margin: 0 0 6px; }
+.note { color: #52606d; margin-bottom: 20px; }
+.card { border: 1px solid #d9e2ec; border-radius: 10px; padding: 14px; margin-bottom: 14px; page-break-inside: avoid; }
+.card h2 { margin: 0 0 8px; font-size: 18px; }
+.meta { font-size: 13px; color: #52606d; line-height: 1.5; }
+img { display: block; margin-top: 10px; max-width: 260px; max-height: 190px; object-fit: cover; object-position: center center; border-radius: 8px; border: 1px solid #d9e2ec; background: #f2f4f7; }
+</style>
+</head>
+<body>
+<h1>CNE Clear Pin Log</h1>
+<div class="note">Exported ${new Date().toLocaleString()} · ${rows.length} cleared pin${rows.length === 1 ? "" : "s"}</div>
+${rows.map(pin => `
+<div class="card">
+  <h2>${escapeHtml(pin.title)}</h2>
+  <div><strong>Category:</strong> ${escapeHtml(formatCategoryLabel(pin.category))}</div>
+  ${pin.description ? `<div style="margin-top:6px;">${escapeHtml(pin.description)}</div>` : ""}
+  <div class="meta" style="margin-top:8px;">
+    Original location: ${Number(pin.lat).toFixed(6)}, ${Number(pin.lng).toFixed(6)}<br>
+    ${pin.created_at ? `Created: ${new Date(pin.created_at).toLocaleString()}<br>` : ""}
+    ${pin.cleared_at ? `Cleared: ${new Date(pin.cleared_at).toLocaleString()}` : "Cleared"}
+  </div>
+  ${pin.export_photo_src ? `<img src="${pin.export_photo_src}" alt="Pin photo">` : ""}
+</div>`).join("\n")}
+</body>
+</html>`;
+
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+      a.href = url;
+      a.download = `cne-clear-log-${stamp}.html`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setStatus("Clear log exported.");
     }
 
     async function handleCsvImport(event) {
@@ -1029,6 +1304,8 @@
     window.openPinModalForPending = openPinModalForPending;
     window.closePinModal = closePinModal;
     window.submitPinForm = submitPinForm;
+    window.closeAllMapPopups = closeAllMapPopups;
+    window.exportClearLogHtml = exportClearLogHtml;
   </script>
 </body>
 </html>
