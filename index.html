@@ -120,6 +120,10 @@
       background: white;
     }
 
+    .floating-ui {
+      position: static;
+    }
+
     .hidden-input {
       display: none;
     }
@@ -349,10 +353,44 @@
     }
 
     @media (max-width: 900px) {
-      .map-help, .status-bar, .map-toolbar, .filter-bar {
+      .floating-ui {
+        position: absolute;
+        top: 10px;
         left: 10px;
         right: 10px;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .map-help {
+        display: none;
+      }
+      .status-bar,
+      .map-toolbar,
+      .filter-bar {
+        position: static;
+        left: auto;
+        right: auto;
+        top: auto;
         max-width: none;
+        min-width: 0;
+        width: auto;
+      }
+      .map-toolbar,
+      .filter-bar {
+        gap: 6px;
+      }
+      .toolbar-btn,
+      .action-btn,
+      .file-label,
+      .filter-bar select {
+        min-height: 40px;
+      }
+      .filter-bar label {
+        display: grid;
+        gap: 4px;
+        flex: 1 1 140px;
       }
       .panel {
         width: calc(100vw - 20px);
@@ -365,12 +403,13 @@
   </style>
 </head>
 <body>
-  <div class="map-help">
-    Click the map to place a pin. Pins stay visible for everyone until cleared. You can attach a photo from a phone or device, filter by status/category, import multiple pins by CSV, and open the clear log for history.
-  </div>
-  <div class="status-bar" id="statusBar">Starting map...</div>
+  <div class="floating-ui">
+    <div class="map-help">
+      Click the map to place a pin. Pins stay visible for everyone until cleared. You can attach a photo from a phone or device, filter by status/category, import multiple pins by CSV, and open the clear log for history.
+    </div>
+    <div class="status-bar" id="statusBar">Starting map...</div>
 
-  <div class="map-toolbar">
+    <div class="map-toolbar">
     <button class="toolbar-btn" onclick="loadPins(true)">Refresh Pins</button>
     <button class="toolbar-btn" onclick="openPinModalForPending()">Add Pin</button>
     <button class="toolbar-btn secondary" onclick="toggleLogPanel()">View Clear Log</button>
@@ -381,29 +420,30 @@
     <input class="hidden-input" id="csvInput" type="file" accept=".csv,text/csv" onchange="handleCsvImport(event)">
   </div>
 
-  <div class="filter-bar">
-    <label>Status
-      <select id="statusFilter" onchange="applyFilters()">
-        <option value="active">Active pins only</option>
-        <option value="cleared">Cleared pins only</option>
-        <option value="all">All pins</option>
-      </select>
-    </label>
+    <div class="filter-bar">
+      <label>Status
+        <select id="statusFilter" onchange="applyFilters()">
+          <option value="active">Active pins only</option>
+          <option value="cleared">Cleared pins only</option>
+          <option value="all">All pins</option>
+        </select>
+      </label>
 
-    <label>Category
-      <select id="categoryFilter" onchange="applyFilters()">
-        <option value="all">All categories</option>
-        <option value="general">General</option>
-        <option value="issue">Issue</option>
-        <option value="setup">Setup</option>
-        <option value="electrical">Electrical</option>
-        <option value="plumbing">Plumbing</option>
-        <option value="safety">Safety</option>
-        <option value="vendor">Vendor</option>
-        <option value="labour">Labour</option>
-        <option value="carpentry">Carpentry</option>
-      </select>
-    </label>
+      <label>Category
+        <select id="categoryFilter" onchange="applyFilters()">
+          <option value="all">All categories</option>
+          <option value="general">General</option>
+          <option value="issue">Issue</option>
+          <option value="setup">Setup</option>
+          <option value="electrical">Electrical</option>
+          <option value="plumbing">Plumbing</option>
+          <option value="safety">Safety</option>
+          <option value="vendor">Vendor</option>
+          <option value="labour">Labour</option>
+          <option value="carpentry">Carpentry</option>
+        </select>
+      </label>
+    </div>
   </div>
 
   <div class="panel" id="logPanel">
