@@ -1076,10 +1076,14 @@ function getSmsRecipientsForCategory(category) {
 
 function openSmsDraft(recipients, message) {
   if (!recipients.length) return false;
+
   const joinedRecipients = recipients.map(cleanPhoneNumber).filter(Boolean).join(",");
   if (!joinedRecipients) return false;
+
   const smsUrl = `sms:${joinedRecipients}?body=${encodeURIComponent(message)}`;
-  window.open(smsUrl, "_blank");
+
+  // Better than window.open for phone SMS handlers
+  window.location.href = smsUrl;
   return true;
 }
 
