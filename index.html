@@ -501,7 +501,6 @@
         <input type="file" id="pinPhotoFileInput" accept="image/*" capture="environment">
       </label>
       <label>Text these numbers
-        <input type="text" id="pinNotifySmsInput" placeholder="Example: 4161111111, 4162222222">
       </label>
       <label style="display:flex; align-items:center; gap:8px; font-weight:normal;">
         <input type="checkbox" id="pinNotifySmsNowInput" style="width:auto; margin:0;"> Text contacts now after saving this pin
@@ -557,7 +556,6 @@
     const pinDescriptionInput = document.getElementById("pinDescriptionInput");
     const pinCategoryInput = document.getElementById("pinCategoryInput");
     const pinPhotoFileInput = document.getElementById("pinPhotoFileInput");
-    const pinNotifySmsInput = document.getElementById("pinNotifySmsInput");
     const pinNotifySmsNowInput = document.getElementById("pinNotifySmsNowInput");
     const pinPhotoPreview = document.getElementById("pinPhotoPreview");
     const pinLocationNote = document.getElementById("pinLocationNote");
@@ -884,20 +882,19 @@
       }
     }
 
-    function resetPinForm() {
-      pinTitleInput.value = "";
-      pinDescriptionInput.value = "";
-      pinCategoryInput.value = "general";
-      pinPhotoFileInput.value = "";
-      pinNotifySmsInput.value = "";
-      pinNotifySmsNowInput.checked = false;
-      if (previewObjectUrl) {
-        URL.revokeObjectURL(previewObjectUrl);
-        previewObjectUrl = null;
-      }
-      pinPhotoPreview.style.display = "none";
-      pinPhotoPreview.removeAttribute("src");
-    }
+function resetPinForm() {
+  pinTitleInput.value = "";
+  pinDescriptionInput.value = "";
+  pinCategoryInput.value = "general";
+  pinPhotoFileInput.value = "";
+  pinNotifySmsNowInput.checked = false;
+  if (previewObjectUrl) {
+    URL.revokeObjectURL(previewObjectUrl);
+    previewObjectUrl = null;
+  }
+  pinPhotoPreview.style.display = "none";
+  pinPhotoPreview.removeAttribute("src");
+}
 
     function openPinModalForPending() {
       if (!pendingLatLng) {
@@ -1062,32 +1059,53 @@
       const descriptionLine = pin.description ? `Description: ${pin.description}\n` : "";
       return `You have a request. Please open the app: ${APP_LINK}\n\nTitle: ${pin.title}\nCategory: ${categoryLabel}\n${descriptionLine}Location: ${Number(pin.lat).toFixed(6)}, ${Number(pin.lng).toFixed(6)}`;
     }
+/* const CONTACTS = {
+  labour: ["4165551111", "4165552222", "4165553333"],
+  carpentry: ["4165554444", "4165555555"]
+};
+*/
+const CONTACTS = {
+  labour: ["6472825087"],
+  carpentry: [""]
+};
 
-    function openSmsDraft(recipients, message) {
-      if (!recipients.length) return false;
-      const joinedRecipients = recipients.map(cleanPhoneNumber).filter(Boolean).join(",");
-      if (!joinedRecipients) return false;
-      const smsUrl = `sms:${joinedRecipients}?body=${encodeURIComponent(message)}`;
-      window.open(smsUrl, "_blank");
-      return true;
-    }
+function getSmsRecipientsForCategory(category) {
+  const key = String(category || "").toLowerCase().trim();
+  return CONTACTS[key] || [];
+}
 
-    function triggerSmsNotification(pin) {
-      if (!pinNotifySmsNowInput.checked) return;
-      const smsRecipients = splitContactList(pinNotifySmsInput.value).map(cleanPhoneNumber).filter(Boolean);
-      if (!smsRecipients.length) {
-        setStatus("Pin saved. No text draft opened because no phone numbers were entered.");
-        return;
-      }
-      const opened = openSmsDraft(smsRecipients, buildNotificationMessage(pin));
-      if (opened) {
-        if (smsRecipients.length > 1) {
-          setStatus("Pin saved. Text draft opened if your phone/browser supports multiple recipients.");
-        } else {
-          setStatus("Pin saved and text draft opened.");
-        }
-      }
-    }
+function openSmsDraft(recipients, message) {
+  if (!recipients.length) return false;
+  const joinedRecipients = recipients.map(cleanPhoneNumber).filter(Boolean).join(",");
+  if (!joinedRecipients) return false;
+  const smsUrl = `sms:${joinedRecipients}?body=${encodeURIComponent(message)}`;
+  window.open(smsUrl, "_blank");
+  return true;
+}
+
+function triggerSmsNotification(pin) {
+  if (!pinNotifySmsNowInput.checked) return;
+
+  const smsRecipients = getSmsRecipientsForCategory(pin.category)
+    .map(cleanPhoneNumber)
+    .filter(Boolean);
+
+  if (!smsRecipients.length) {
+    setStatus("Pin saved. No contacts set for this category.");
+    return;
+  }
+
+  const opened = openSmsDraft(smsRecipients, buildNotificationMessage(pin));
+
+  if (opened) {
+    const categoryLabel = pin.category
+      ? pin.category.charAt(0).toUpperCase() + pin.category.slice(1)
+      : "Default";
+
+    setStatus(`Pin saved. Text draft opened for ${categoryLabel} contacts.`);
+  }
+}
+  
 
     function parseCsv(text) {
       const rows = text.replace(/\r/g, "").trim().split("\n");
