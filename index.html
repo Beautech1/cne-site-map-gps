@@ -124,6 +124,27 @@
       position: static;
     }
 
+    .mobile-ui-toggle {
+      display: none;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      color: #fff;
+      background: #005a9c;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .floating-ui-content {
+      display: contents;
+    }
+
     .hidden-input {
       display: none;
     }
@@ -363,9 +384,25 @@
         flex-direction: column;
         gap: 8px;
       }
+
+      .mobile-ui-toggle {
+        display: flex;
+      }
+
+      .floating-ui-content {
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .floating-ui.mobile-open .floating-ui-content {
+        display: flex;
+      }
+
       .map-help {
         display: none;
       }
+
       .status-bar,
       .map-toolbar,
       .filter-bar {
@@ -377,24 +414,29 @@
         min-width: 0;
         width: auto;
       }
+
       .map-toolbar,
       .filter-bar {
         gap: 6px;
       }
+
       .toolbar-btn,
       .action-btn,
       .file-label,
       .filter-bar select {
         min-height: 40px;
       }
+
       .filter-bar label {
         display: grid;
         gap: 4px;
         flex: 1 1 140px;
       }
+
       .panel {
         width: calc(100vw - 20px);
       }
+
       .leaflet-popup-close-button {
         font-size: 22px !important;
         padding: 6px 10px 0 0 !important;
@@ -403,47 +445,56 @@
   </style>
 </head>
 <body>
-  <div class="floating-ui">
-    <div class="map-help">
-      Click the map to place a pin. Pins stay visible for everyone until cleared. You can attach a photo from a phone or device, filter by status/category, import multiple pins by CSV, and open the clear log for history.
-    </div>
-    <div class="status-bar" id="statusBar">Starting map...</div>
+  <div class="floating-ui" id="floatingUi">
+    <button class="mobile-ui-toggle" id="mobileUiToggle" type="button" onclick="toggleMobileUi()">
+      <span>Map Controls</span>
+      <span id="mobileUiToggleIcon">☰</span>
+    </button>
 
-    <div class="map-toolbar">
-    <button class="toolbar-btn" onclick="loadPins(true)">Refresh Pins</button>
-    <button class="toolbar-btn" onclick="openPinModalForPending()">Add Pin</button>
-    <button class="toolbar-btn secondary" onclick="toggleLogPanel()">View Clear Log</button>
-    <button class="toolbar-btn secondary" onclick="exportClearLogHtml()">Export Clear Log</button>
-    <button class="toolbar-btn secondary" onclick="exportClearLogCsv()">Export CSV Log</button>
-    <button class="toolbar-btn secondary" onclick="toggleLegendPanel()">Legend</button>
-    <label class="file-label secondary" for="csvInput">Import CSV Pins</label>
-    <input class="hidden-input" id="csvInput" type="file" accept=".csv,text/csv" onchange="handleCsvImport(event)">
+    <div class="floating-ui-content" id="floatingUiContent">
+      <div class="map-help">
+        Click the map to place a pin. Pins stay visible for everyone until cleared. You can attach a photo from a phone or device, filter by status/category, import multiple pins by CSV, and open the clear log for history.
+      </div>
+      <div class="status-bar" id="statusBar">Starting map...</div>
+
+      <div class="map-toolbar">
+        <button class="toolbar-btn" onclick="loadPins(true); closeMobileUiAfterAction();">Refresh Pins</button>
+        <button class="toolbar-btn" onclick="openPinModalForPending(); closeMobileUiAfterAction();">Add Pin</button>
+        <button class="toolbar-btn secondary" onclick="toggleLogPanel(); closeMobileUiAfterAction();">View Clear Log</button>
+        <button class="toolbar-btn secondary" onclick="exportClearLogHtml(); closeMobileUiAfterAction();">Export Clear Log</button>
+        <button class="toolbar-btn secondary" onclick="exportClearLogCsv(); closeMobileUiAfterAction();">Export CSV Log</button>
+        <button class="toolbar-btn secondary" onclick="toggleLegendPanel(); closeMobileUiAfterAction();">Legend</button>
+        <label class="file-label secondary" for="csvInput">Import CSV Pins</label>
+        <input class="hidden-input" id="csvInput" type="file" accept=".csv,text/csv" onchange="handleCsvImport(event)">
+      </div>
+
+      <div class="filter-bar">
+        <label>Status
+          <select id="statusFilter" onchange="applyFilters()">
+            <option value="active">Active pins only</option>
+            <option value="cleared">Cleared pins only</option>
+            <option value="all">All pins</option>
+          </select>
+        </label>
+
+        <label>Category
+          <select id="categoryFilter" onchange="applyFilters()">
+            <option value="all">All categories</option>
+            <option value="general">General</option>
+            <option value="issue">Issue</option>
+            <option value="setup">Setup</option>
+            <option value="electrical">Electrical</option>
+            <option value="plumbing">Plumbing</option>
+            <option value="safety">Safety</option>
+            <option value="vendor">Vendor</option>
+            <option value="labour">Labour</option>
+            <option value="carpentry">Carpentry</option>
+          </select>
+        </label>
+      </div>
+    </div>
   </div>
 
-    <div class="filter-bar">
-      <label>Status
-        <select id="statusFilter" onchange="applyFilters()">
-          <option value="active">Active pins only</option>
-          <option value="cleared">Cleared pins only</option>
-          <option value="all">All pins</option>
-        </select>
-      </label>
-
-      <label>Category
-        <select id="categoryFilter" onchange="applyFilters()">
-          <option value="all">All categories</option>
-          <option value="general">General</option>
-          <option value="issue">Issue</option>
-          <option value="setup">Setup</option>
-          <option value="electrical">Electrical</option>
-          <option value="plumbing">Plumbing</option>
-          <option value="safety">Safety</option>
-          <option value="vendor">Vendor</option>
-          <option value="labour">Labour</option>
-          <option value="carpentry">Carpentry</option>
-        </select>
-      </label>
-    </div>
   </div>
 
   <div class="panel" id="logPanel">
@@ -559,9 +610,30 @@
     const pinNotifySmsNowInput = document.getElementById("pinNotifySmsNowInput");
     const pinPhotoPreview = document.getElementById("pinPhotoPreview");
     const pinLocationNote = document.getElementById("pinLocationNote");
+    const floatingUi = document.getElementById("floatingUi");
+    const mobileUiToggleIcon = document.getElementById("mobileUiToggleIcon");
 
     function setStatus(message) {
       statusBar.textContent = message;
+    }
+
+    function toggleMobileUi(forceOpen) {
+      const isOpen = floatingUi.classList.contains("mobile-open");
+      const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : !isOpen;
+
+      if (shouldOpen) {
+        floatingUi.classList.add("mobile-open");
+        if (mobileUiToggleIcon) mobileUiToggleIcon.textContent = "✕";
+      } else {
+        floatingUi.classList.remove("mobile-open");
+        if (mobileUiToggleIcon) mobileUiToggleIcon.textContent = "☰";
+      }
+    }
+
+    function closeMobileUiAfterAction() {
+      if (window.innerWidth <= 900) {
+        toggleMobileUi(false);
+      }
     }
 
     function escapeHtml(text) {
@@ -1353,11 +1425,19 @@ ${rows.map(pin => `
     modalBackdrop.addEventListener("click", closePinModal);
     pinPhotoFileInput.addEventListener("change", previewSelectedPhoto);
 
+    if (window.innerWidth <= 900) {
+      toggleMobileUi(false);
+    } else {
+      toggleMobileUi(true);
+    }
+
     buildLegend();
     loadPins(true);
     subscribeRealtime();
 
     window.loadPins = loadPins;
+    window.toggleMobileUi = toggleMobileUi;
+    window.closeMobileUiAfterAction = closeMobileUiAfterAction;
     window.toggleLogPanel = toggleLogPanel;
     window.toggleLegendPanel = toggleLegendPanel;
     window.clearPin = clearPin;
