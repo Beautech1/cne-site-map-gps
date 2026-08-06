@@ -424,6 +424,39 @@
       background: #f2f4f7;
     }
 
+    .photo-preview-item {
+      position: relative;
+      min-width: 0;
+    }
+
+    .photo-preview-remove {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 28px;
+      height: 28px;
+      border: 2px solid #fff;
+      border-radius: 999px;
+      background: #b71c1c;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 900;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,.35);
+      z-index: 2;
+    }
+
+    .photo-preview-remove:hover,
+    .photo-preview-remove:focus-visible {
+      background: #8e1515;
+      outline: 2px solid #fff;
+      outline-offset: 1px;
+    }
+
     .photo-section-title {
       display: block;
       margin-top: 8px;
@@ -2844,7 +2877,7 @@
 </head>
 <body>
 
-  <button type="button" id="appVersionBadge" class="app-version-badge" title="Tap to copy app version" onclick="copyAppVersion()">Version 2026.07.18-CW</button>
+  <button type="button" id="appVersionBadge" class="app-version-badge" title="Tap to copy app version" onclick="copyAppVersion()">Version 2026.08.04-CY</button>
   <div class="floating-ui" id="floatingUi">
     <button class="mobile-ui-toggle" id="mobileUiToggle" type="button" onclick="toggleMobileUi()">
       <span class="mobile-ui-toggle-main">
@@ -3649,7 +3682,7 @@
     </div>
     <div class="modal-actions">
       <button class="action-btn secondary" onclick="closePinModal()">Cancel</button>
-      <button class="action-btn" onclick="submitPinForm()">Save Pin</button>
+      <button class="action-btn" id="savePinButton" type="button" onclick="submitPinForm()">Save Pin</button>
     </div>
   </div>
 
@@ -3844,8 +3877,8 @@
     const SUPABASE_TABLE = "pins";
     const PIN_CHANGE_LOG_TABLE = "app_pin_change_log";
     const SUPABASE_BUCKET = "pin-photos";
-    const APP_VERSION = "2026.07.19-CX";
-    const APP_VERSION_SUMMARY = "Added informational-link print log, selectable whole-map pin size, and ID plus title labels on all selected-map print backgrounds";
+    const APP_VERSION = "2026.08.04-CY";
+    const APP_VERSION_SUMMARY = "Added mobile photo-library and multiple-photo support for new and edited pins, removable Add Pin photo previews, and duplicate Save Pin submission protection";
     const customReportSelectedPinIds = new Set();
     const allLogsSelectedDeletePinIds = new Set();
     let customReportMapMode = false;
@@ -3917,6 +3950,7 @@
     let profiles = loadProfilesFromStorage();
     let pendingClearPinId = null;
     let clearSubmissionInProgress = false;
+    let pinSubmissionInProgress = false;
     const activeClearRequests = new Set();
     let pendingEditPinId = null;
     let selectedDepartmentView = localStorage.getItem(DEPARTMENT_VIEW_STORAGE_KEY) || "";
@@ -10965,6 +10999,7 @@ function resetPinForm() {
     }
 
     async function submitPinForm() {
+      if (pinSubmissionInProgress) return;
       if (!userHasPermission("addPins")) return denyPermission("This user cannot add new pins.");
       if (!pendingLatLng) {
         alert(isFloorPlanMap() ? "Click the floor plan first to choose a pin location." : "Click the map first to choose a pin location.");
@@ -11014,6 +11049,14 @@ function resetPinForm() {
 
       let uploadedPhotoUrls = [];
       const photoFiles = Array.from(pendingPinPhotoFiles || []);
+      const savePinButton = document.getElementById("savePinButton");
+
+      pinSubmissionInProgress = true;
+      if (savePinButton) {
+        savePinButton.disabled = true;
+        savePinButton.textContent = "Saving…";
+        savePinButton.setAttribute("aria-busy", "true");
+      }
 
       try {
         if (photoFiles.length) {
@@ -11043,8 +11086,15 @@ function resetPinForm() {
         closePinModal();
       } catch (error) {
         console.error(error);
-        alert("Could not upload the photo. Check your storage bucket and storage policies.");
-        setStatus("Photo upload failed.");
+        alert("Could not save the pin or upload its photos. Please try again.");
+        setStatus("Pin save failed.");
+      } finally {
+        pinSubmissionInProgress = false;
+        if (savePinButton) {
+          savePinButton.disabled = false;
+          savePinButton.textContent = "Save Pin";
+          savePinButton.removeAttribute("aria-busy");
+        }
       }
     }
 
@@ -11333,12 +11383,34 @@ function resetPinForm() {
       pendingPinPhotoFiles.forEach((file, index) => {
         const url = URL.createObjectURL(file);
         previewObjectUrl.push(url);
+
+        const item = document.createElement("div");
+        item.className = "photo-preview-item";
+
         const img = document.createElement("img");
         img.src = url;
         img.alt = `Photo preview ${index + 1}`;
-        pinPhotoPreview.appendChild(img);
+
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "photo-preview-remove";
+        removeButton.setAttribute("aria-label", `Remove photo ${index + 1}`);
+        removeButton.title = "Remove this photo";
+        removeButton.textContent = "×";
+        removeButton.addEventListener("click", () => removePendingPinPhoto(index));
+
+        item.appendChild(img);
+        item.appendChild(removeButton);
+        pinPhotoPreview.appendChild(item);
       });
       pinPhotoPreview.style.display = "grid";
+    }
+
+    function removePendingPinPhoto(index) {
+      if (!Number.isInteger(index) || index < 0 || index >= pendingPinPhotoFiles.length) return;
+      pendingPinPhotoFiles.splice(index, 1);
+      renderPinPhotoPreview();
+      setStatus("Photo removed from this new pin.");
     }
 
     function previewSelectedPhoto() {
