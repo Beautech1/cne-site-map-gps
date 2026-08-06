@@ -2877,7 +2877,7 @@
 </head>
 <body>
 
-  <button type="button" id="appVersionBadge" class="app-version-badge" title="Tap to copy app version" onclick="copyAppVersion()">Version 2026.08.04-CY</button>
+  <button type="button" id="appVersionBadge" class="app-version-badge" title="Tap to copy app version" onclick="copyAppVersion()">Version 2026.08.05-CZ</button>
   <div class="floating-ui" id="floatingUi">
     <button class="mobile-ui-toggle" id="mobileUiToggle" type="button" onclick="toggleMobileUi()">
       <span class="mobile-ui-toggle-main">
@@ -3877,8 +3877,8 @@
     const SUPABASE_TABLE = "pins";
     const PIN_CHANGE_LOG_TABLE = "app_pin_change_log";
     const SUPABASE_BUCKET = "pin-photos";
-    const APP_VERSION = "2026.08.04-CY";
-    const APP_VERSION_SUMMARY = "Added mobile photo-library and multiple-photo support for new and edited pins, removable Add Pin photo previews, and duplicate Save Pin submission protection";
+    const APP_VERSION = "2026.08.05-CZ";
+    const APP_VERSION_SUMMARY = "Mobile performance update: lazy-loaded photos, non-overlapping refresh and device checks, safer pin loading, and more efficient image preview decoding; existing workflows remain unchanged";
     const customReportSelectedPinIds = new Set();
     const allLogsSelectedDeletePinIds = new Set();
     let customReportMapMode = false;
@@ -3960,6 +3960,7 @@
     let supabaseClient = null;
     let realtimeChannel = null;
     let allPins = [];
+    let pinLoadInProgress = false;
     let pendingLatLng = null;
     let pendingMovePinId = null;
     let pendingOutdoorMarker = null;
@@ -6099,22 +6100,29 @@
       return false;
     }
 
+    let deviceStatusCheckInProgress = false;
+
+    async function runDeviceStatusCheck(showNotice = true) {
+      if (deviceStatusCheckInProgress || document.hidden) return false;
+      deviceStatusCheckInProgress = true;
+      try {
+        const blocked = await checkCurrentSignInCodeStatus(showNotice);
+        if (!blocked) return await checkDeviceSignOutRequest(showNotice);
+        return blocked;
+      } finally {
+        deviceStatusCheckInProgress = false;
+      }
+    }
+
     function startDeviceSignOutWatcher() {
       if (deviceSignOutCheckTimer) return;
-      deviceSignOutCheckTimer = window.setInterval(async () => {
-        const blocked = await checkCurrentSignInCodeStatus(true);
-        if (!blocked) checkDeviceSignOutRequest(true);
+      deviceSignOutCheckTimer = window.setInterval(() => {
+        runDeviceStatusCheck(true);
       }, 20000);
-      document.addEventListener('visibilitychange', async () => {
-        if (!document.hidden) {
-          const blocked = await checkCurrentSignInCodeStatus(true);
-          if (!blocked) checkDeviceSignOutRequest(true);
-        }
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) runDeviceStatusCheck(true);
       });
-      window.addEventListener('focus', async () => {
-        const blocked = await checkCurrentSignInCodeStatus(true);
-        if (!blocked) checkDeviceSignOutRequest(true);
-      });
+      window.addEventListener('focus', () => runDeviceStatusCheck(true));
     }
 
 
@@ -8368,9 +8376,9 @@
       const countText = list.length === 1 ? "1 photo" : list.length + " photos";
       const galleryClass = imageClass.indexOf("report") !== -1 || imageClass.indexOf("print") !== -1 || imageClass.indexOf("log-photo") !== -1 ? "photo-gallery report-gallery" : "photo-gallery";
       const imagesHtml = list.length === 1
-        ? '<img class="' + imageClass + '" src="' + escapeHtml(list[0]) + '" alt="' + escapeHtml(label) + '" onerror="this.style.display=\'none\'">'
+        ? '<img class="' + imageClass + '" src="' + escapeHtml(list[0]) + '" alt="' + escapeHtml(label) + '" loading="lazy" decoding="async" onerror="this.style.display=\'none\'">'
         : '<div class="' + galleryClass + '">' + list.map((url, index) =>
-          '<img class="' + imageClass + '" src="' + escapeHtml(url) + '" alt="' + escapeHtml(label) + ' ' + (index + 1) + '" onerror="this.style.display=\'none\'">'
+          '<img class="' + imageClass + '" src="' + escapeHtml(url) + '" alt="' + escapeHtml(label) + ' ' + (index + 1) + '" loading="lazy" decoding="async" onerror="this.style.display=\'none\'">'
         ).join("") + '</div>';
 
       return '<span class="photo-section-title">' + escapeHtml(label) + ' (' + escapeHtml(countText) + ')</span>' + imagesHtml;
@@ -9827,33 +9835,39 @@
         setStatus("");
         return;
       }
+      if (pinLoadInProgress) return;
+      pinLoadInProgress = true;
 
       if (showMessage) setStatus("Loading pins...");
 
-      const { data, error } = await supabaseClient
-        .from(SUPABASE_TABLE)
-        .select("id, title, description, lat, lng, photo_url, photo_urls, clear_photo_urls, map_snapshot_url, category, is_cleared, created_at, cleared_at, install_date, removal_date, reported_by, original_reported_by, created_by_user_name, created_by_department, cleared_by, clear_comment, status, map_id, location_type, x_percent, y_percent, direction_angle, marker_style, created_device_id, created_device_label, created_user_agent, cleared_device_id, cleared_device_label, cleared_user_agent, last_action, last_action_by, last_action_device_id, last_action_device_label, last_action_user_agent")
-        .order("created_at", { ascending: true });
+      try {
+        const { data, error } = await supabaseClient
+          .from(SUPABASE_TABLE)
+          .select("id, title, description, lat, lng, photo_url, photo_urls, clear_photo_urls, map_snapshot_url, category, is_cleared, created_at, cleared_at, install_date, removal_date, reported_by, original_reported_by, created_by_user_name, created_by_department, cleared_by, clear_comment, status, map_id, location_type, x_percent, y_percent, direction_angle, marker_style, created_device_id, created_device_label, created_user_agent, cleared_device_id, cleared_device_label, cleared_user_agent, last_action, last_action_by, last_action_device_id, last_action_device_label, last_action_user_agent")
+          .order("created_at", { ascending: true });
 
-      if (error) {
-        console.error(error);
-        setStatus("Could not load pins. Check table columns, policies, and API key.");
-        return;
+        if (error) {
+          console.error(error);
+          setStatus("Could not load pins. Check table columns, policies, and API key.");
+          return;
+        }
+
+        allPins = (data || []).map(pin => ({
+          ...pin,
+          original_reported_by: pin.original_reported_by || pin.reported_by || null,
+          created_by_user_name: pin.created_by_user_name || null,
+          created_by_department: pin.created_by_department || pin.created_device_label || null,
+          category: pin.category || "general",
+          map_id: pin.map_id || "outdoor_site",
+          location_type: pin.location_type || "gps"
+        })).filter(userCanViewPinForCurrentAccess);
+
+        applyFilters();
+        if (showMessage) setStatus(`Loaded ${allPins.length} total pin${allPins.length === 1 ? "" : "s"}.`);
+        handleInitialUrlAction();
+      } finally {
+        pinLoadInProgress = false;
       }
-
-      allPins = (data || []).map(pin => ({
-        ...pin,
-        original_reported_by: pin.original_reported_by || pin.reported_by || null,
-        created_by_user_name: pin.created_by_user_name || null,
-        created_by_department: pin.created_by_department || pin.created_device_label || null,
-        category: pin.category || "general",
-        map_id: pin.map_id || "outdoor_site",
-        location_type: pin.location_type || "gps"
-      })).filter(userCanViewPinForCurrentAccess);
-
-      applyFilters();
-      if (showMessage) setStatus(`Loaded ${allPins.length} total pin${allPins.length === 1 ? "" : "s"}.`);
-      handleInitialUrlAction();
     }
 
     async function savePin(latlng, title, description, photoUrls, category, reportedBy, statusValue = "active", installDate = null, removalDate = null, directionAngle = null, markerStyle = "dot") {
@@ -11335,6 +11349,7 @@ function resetPinForm() {
         const img = document.createElement("img");
         img.src = url;
         img.alt = `Photo preview ${index + 1}`;
+        img.decoding = "async";
         previewElement.appendChild(img);
       });
       previewElement.style.display = "grid";
@@ -11357,6 +11372,7 @@ function resetPinForm() {
         const img = document.createElement("img");
         img.src = url;
         img.alt = `Photo preview ${index + 1}`;
+        img.decoding = "async";
         previewElement.appendChild(img);
       });
       previewElement.style.display = "grid";
@@ -11390,6 +11406,7 @@ function resetPinForm() {
         const img = document.createElement("img");
         img.src = url;
         img.alt = `Photo preview ${index + 1}`;
+        img.decoding = "async";
 
         const removeButton = document.createElement("button");
         removeButton.type = "button";
@@ -13103,8 +13120,11 @@ ${rows.map(pin => `
       return false;
     }
 
+    let appUpdateCheckInProgress = false;
+
     async function checkForAppUpdate() {
-      if (location.protocol === "file:") return;
+      if (location.protocol === "file:" || document.hidden || appUpdateCheckInProgress) return;
+      appUpdateCheckInProgress = true;
       try {
         const url = new URL(location.href);
         url.searchParams.set("_app_update_check", Date.now());
@@ -13119,7 +13139,11 @@ ${rows.map(pin => `
           if(text) text.textContent="A newer app version ("+remoteVersion+") is available. Refresh before continuing.";
           if(banner) banner.classList.add("show");
         }
-      } catch (error) { console.warn("App update check failed", error); }
+      } catch (error) {
+        console.warn("App update check failed", error);
+      } finally {
+        appUpdateCheckInProgress = false;
+      }
     }
 
     function reloadForAppUpdate() {
