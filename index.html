@@ -3609,8 +3609,8 @@
         <input type="text" id="pinCustomTitleInput" placeholder="Type a custom pin title..." maxlength="160">
         <small style="color:#607084;font-weight:normal;">When filled in, this replaces the preset title above.</small>
       </label>
-      <label>Location and service details <span style="color:#b71c1c;">*</span>
-        <textarea id="pinDescriptionInput" placeholder="Required. Example: west washroom, beside sink. Add any issue details here." required></textarea>
+      <label>Location and service details (optional)
+        <textarea id="pinDescriptionInput" placeholder="Optional. Example: west washroom, beside sink. Add any issue details here."></textarea>
       </label>
       <div class="marker-direction-grid" id="pinMarkerDirectionOptions">
         <label>Marker (optional)
@@ -3877,8 +3877,8 @@
     const SUPABASE_TABLE = "pins";
     const PIN_CHANGE_LOG_TABLE = "app_pin_change_log";
     const SUPABASE_BUCKET = "pin-photos";
-    const APP_VERSION = "2026.08.06-DA";
-    const APP_VERSION_SUMMARY = "Shows the active sign-in profile and device user beside the version, clears the saved name and department after sign-out or an admin kick, and uses a shorter service-request text message";
+    const APP_VERSION = "2026.08.24-DC";
+    const APP_VERSION_SUMMARY = "Locks the signed-in device identity so Reported By/Cleared By fields cannot overwrite it, adds the pin title to text notifications and report details, and makes Location and service details optional";
     const customReportSelectedPinIds = new Set();
     const allLogsSelectedDeletePinIds = new Set();
     let customReportMapMode = false;
@@ -6434,13 +6434,10 @@
     }
 
     function rememberUserNameFromInput(inputElement) {
-      if (!inputElement) return;
-      const name = String(inputElement.value || "").trim();
-      if (!name) return;
-      const profile = getDeviceProfile();
-      if (profile.user_name !== name) {
-        saveDeviceProfile({ user_name: name, device_label: profile.device_label || name });
-      }
+      // The signed-in device identity is intentionally NOT changed from service-order fields.
+      // Reported By / Cleared By may identify another person, but the device profile remains
+      // tied to the person who signed in until Sign Out / admin kick or Change Device User.
+      return inputElement ? String(inputElement.value || "").trim() : "";
     }
 
     function getDeviceAuditFields(actionName, personName) {
@@ -7316,7 +7313,6 @@
       const title = customTitle || editPinTitleInput.value || "General request";
       const description = editPinDescriptionInput.value.trim();
       const reportedBy = editPinReportedByInput.value.trim();
-      rememberUserNameFromInput(editPinReportedByInput);
       const status = editPinStatusInput.value;
       const clearedBy = editPinClearedByInput.value.trim();
       const clearComment = editPinClearCommentInput ? editPinClearCommentInput.value.trim() : "";
@@ -10050,7 +10046,6 @@
       }
 
       const clearedBy = clearByInput.value.trim();
-      rememberUserNameFromInput(clearByInput);
       if (!clearedBy) {
         alert("Cleared By is required.");
         clearByInput.focus();
@@ -11031,7 +11026,6 @@ function resetPinForm() {
       }
 
       const reportedBy = pinReportedByInput.value.trim();
-      rememberUserNameFromInput(pinReportedByInput);
       if (!reportedBy) {
         alert("Reported By is required.");
         pinReportedByInput.focus();
@@ -11048,11 +11042,6 @@ function resetPinForm() {
       }
 
       const locationDetails = pinDescriptionInput.value.trim();
-      if (!locationDetails) {
-        alert("Location and service details are required.");
-        pinDescriptionInput.focus();
-        return;
-      }
 
       const installDate = pinInstallDateInput && pinInstallDateInput.value ? pinInstallDateInput.value : null;
       const removalDate = pinRemovalDateInput && pinRemovalDateInput.value ? pinRemovalDateInput.value : null;
@@ -11979,6 +11968,7 @@ function resetPinForm() {
         '<div class="mini-report-card">' +
           '<h2 style="margin:0 0 10px;">' + escapeHtml(pin.title || "Item Report") + '</h2>' +
           '<div class="mini-report-grid">' +
+            '<div><strong>Title:</strong> ' + escapeHtml(pin.title || "Untitled") + '</div>' +
             '<div><strong>Status:</strong> ' + escapeHtml(status) + '</div>' +
             '<div><strong>Department:</strong> ' + escapeHtml(dept) + '</div>' +
             '<div><strong>Map / Building:</strong> ' + escapeHtml(mapName) + '</div>' +
@@ -12223,7 +12213,7 @@ function resetPinForm() {
       const recipientLabel = categoryLabel + " text recipients";
       const reportLink = pin && pin.id ? buildReportLink(pin, { recipient: recipientLabel, source: "text" }) : APP_LINK;
       const customLine = customMessage && customMessage.trim() ? `\nNote: ${customMessage.trim()}` : "";
-      return `Status: ${status}\nAssigned to: ${categoryLabel}\nLocation: ${mapName}\nReported/created by: ${createdBy}\nReported photos (${photoLabel})${customLine}\nMini map / pin location:\n${reportLink}`;
+      return `Title: ${String(pin.title || "Untitled").trim()}\nStatus: ${status}\nAssigned to: ${categoryLabel}\nLocation: ${mapName}\nReported/created by: ${createdBy}\nReported photos (${photoLabel})${customLine}\nMini map / pin location:\n${reportLink}`;
     }
 function getCustomSmsRecipients(enabledEl, inputEl) {
   if (!enabledEl || !enabledEl.checked || !inputEl) return [];
