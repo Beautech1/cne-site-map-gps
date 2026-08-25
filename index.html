@@ -3633,7 +3633,7 @@
         <input type="text" id="pinReportedByInput" list="pinReportedByList" placeholder="Select or type name..." required>
         <datalist id="pinReportedByList"></datalist>
       </label>
-      <label>Department
+      <label>Assign to Department Name
         <select id="pinCategoryInput" onchange="onPinDepartmentChange()"></select>
       </label>
       <label>Title
@@ -3754,7 +3754,7 @@
       <div class="panel-note" id="editPinStatusNote" style="padding-top:0;">Update this request, reassign it, or relocate the pin.</div>
       <div class="panel-note" id="editPinLocationNote" style="padding-top:0;">Current location stays unless you relocate it.</div>
       <button class="action-btn secondary" type="button" onclick="startMovePinLocation()">Relocate Pin</button>
-      <label>Department
+      <label>Assign to Department Name
         <select id="editPinCategoryInput" onchange="onEditPinDepartmentChange()"></select>
       </label>
       <label>Title
@@ -3912,8 +3912,8 @@
     const SUPABASE_TABLE = "pins";
     const PIN_CHANGE_LOG_TABLE = "app_pin_change_log";
     const SUPABASE_BUCKET = "pin-photos";
-    const APP_VERSION = "2026.08.24-DD";
-    const APP_VERSION_SUMMARY = "Adds a tap-to-expand Outstanding by Map / Building navigator to the active-visible summary, while retaining the locked device identity, pin title in text/report details, and optional Location and service details";
+    const APP_VERSION = "2026.08.24-DE";
+    const APP_VERSION_SUMMARY = "Renames the Add/Edit Pin Department field to Assign to Department Name, while retaining the Outstanding by Map / Building navigator, locked device identity, pin title in text/report details, and optional Location and service details";
     const customReportSelectedPinIds = new Set();
     const allLogsSelectedDeletePinIds = new Set();
     let customReportMapMode = false;
