@@ -101,8 +101,8 @@
 
     .control-row.summary-row {
       justify-content: flex-start;
-      flex-wrap: nowrap;
-      overflow: hidden;
+      flex-wrap: wrap;
+      overflow: visible;
     }
 
     .toolbar-select-label,
@@ -1685,10 +1685,19 @@
       font-weight: 800;
       white-space: nowrap;
       flex: 0 0 auto;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .active-count-check:hover,
+    .active-count-check[aria-expanded="true"] {
+      background: #dceeff;
+      border-color: #005a9c;
+      box-shadow: 0 0 0 2px rgba(0,90,156,0.10);
     }
 
     .outstanding-summary {
-      display: flex;
+      display: none;
       gap: 5px;
       align-items: center;
       justify-content: flex-start;
@@ -1702,6 +1711,32 @@
       padding: 0;
       box-shadow: none;
       scrollbar-width: thin;
+    }
+
+    .outstanding-summary.navigator-open {
+      display: flex;
+      flex: 1 0 100%;
+      width: 100%;
+      max-width: 100%;
+      flex-wrap: wrap;
+      overflow-x: visible;
+      gap: 6px;
+      margin-top: 2px;
+      padding: 7px;
+      border: 1px solid #c9dcec;
+      border-radius: 8px;
+      background: #f8fbfe;
+      box-sizing: border-box;
+    }
+
+    .outstanding-navigator-title {
+      flex: 1 0 100%;
+      font-size: 10px;
+      font-weight: 800;
+      color: #334155;
+      text-transform: uppercase;
+      letter-spacing: .02em;
+      padding: 0 1px 2px;
     }
 
     .outstanding-card {
@@ -2320,12 +2355,12 @@
       flex: 0 0 auto;
     }
 
-    .outstanding-summary {
+    .outstanding-summary.navigator-open {
         width: 100%;
         max-width: 100%;
-        overflow-x: auto;
-        overflow-y: hidden;
-        padding: 2px 0 5px;
+        overflow-x: visible;
+        overflow-y: auto;
+        padding: 7px;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: thin;
       }
@@ -2877,7 +2912,7 @@
 </head>
 <body>
 
-  <button type="button" id="appVersionBadge" class="app-version-badge" title="Tap to copy app version" onclick="copyAppVersion()">Version 2026.08.05-CZ</button>
+  <button type="button" id="appVersionBadge" class="app-version-badge" title="Tap to copy app version" onclick="copyAppVersion()">Version 2026.08.24-DD</button>
   <div class="floating-ui" id="floatingUi">
     <button class="mobile-ui-toggle" id="mobileUiToggle" type="button" onclick="toggleMobileUi()">
       <span class="mobile-ui-toggle-main">
@@ -2931,8 +2966,8 @@
 
         <div class="control-row summary-row">
           <div class="status-bar" id="statusBar">Starting map...</div>
-          <div class="active-count-check" id="activeCountCheck">0 active visible</div>
-          <div class="outstanding-summary" id="outstandingSummary" aria-label="Outstanding pins by department">
+          <button type="button" class="active-count-check" id="activeCountCheck" aria-expanded="false" aria-controls="outstandingSummary" onclick="toggleOutstandingNavigator()" title="Tap to view outstanding items by map/building">0 active visible ▾</button>
+          <div class="outstanding-summary" id="outstandingSummary" aria-label="Outstanding pins by map or building">
             <div class="panel-note" style="padding:0;">Loading outstanding counts...</div>
           </div>
         </div>
@@ -3877,8 +3912,8 @@
     const SUPABASE_TABLE = "pins";
     const PIN_CHANGE_LOG_TABLE = "app_pin_change_log";
     const SUPABASE_BUCKET = "pin-photos";
-    const APP_VERSION = "2026.08.24-DC";
-    const APP_VERSION_SUMMARY = "Locks the signed-in device identity so Reported By/Cleared By fields cannot overwrite it, adds the pin title to text notifications and report details, and makes Location and service details optional";
+    const APP_VERSION = "2026.08.24-DD";
+    const APP_VERSION_SUMMARY = "Adds a tap-to-expand Outstanding by Map / Building navigator to the active-visible summary, while retaining the locked device identity, pin title in text/report details, and optional Location and service details";
     const customReportSelectedPinIds = new Set();
     const allLogsSelectedDeletePinIds = new Set();
     let customReportMapMode = false;
@@ -9158,6 +9193,27 @@
       return allPins.filter(pin => getPinStatus(pin) === "active");
     }
 
+    function toggleOutstandingNavigator(forceOpen) {
+      if (!outstandingSummary || !activeCountCheck) return;
+      const isOpen = outstandingSummary.classList.contains("navigator-open");
+      const shouldOpen = typeof forceOpen === "boolean" ? forceOpen : !isOpen;
+      outstandingSummary.classList.toggle("navigator-open", shouldOpen);
+      activeCountCheck.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
+      updateActiveCountNavigatorLabel();
+    }
+
+    function updateActiveCountNavigatorLabel() {
+      if (!activeCountCheck) return;
+      const base = String(activeCountCheck.dataset.baseLabel || activeCountCheck.textContent || "0 active visible")
+        .replace(/[▾▴]\s*$/, "")
+        .trim();
+      const open = !!(outstandingSummary && outstandingSummary.classList.contains("navigator-open"));
+      activeCountCheck.textContent = `${base} ${open ? "▴" : "▾"}`;
+      activeCountCheck.title = open
+        ? "Hide outstanding items by map/building"
+        : "Tap to view outstanding items by map/building";
+    }
+
     function navigateOutstanding(mapId, departmentKey) {
       if (departmentKey) {
         setDepartmentView(departmentKey, true);
@@ -9167,6 +9223,7 @@
       }
       if (statusFilter) statusFilter.value = "active";
       applyFilters();
+      toggleOutstandingNavigator(false);
       closeMobileUiAfterAction();
     }
 
@@ -9234,7 +9291,6 @@
       const selected = isValidDepartmentView(selectedDepartmentView) ? selectedDepartmentView : "all";
       const selectedKeys = parseDepartmentViewKeys(selected);
       const selectedPins = activePins.filter(pin => selectedKeys.includes(normalizeAccessDepartmentKey(pin.category || "general")));
-      const selectedName = getDepartmentViewName(selected);
       const countsByMap = countActivePinsByMap(selectedPins, "all");
 
       updateHeaderViewSummary(selectedPins.length);
@@ -9248,14 +9304,9 @@
         .map(item => `${escapeHtml(item.dept.name)}: ${item.count}`)
         .join(" · ");
 
-      let accentColor = "#005a9c";
-      if (selectedKeys.length === 1) {
-        const selectedDept = departments.find(dept => dept.key === selectedKeys[0]);
-        if (selectedDept && selectedDept.color) accentColor = selectedDept.color;
-      }
 
       outstandingSummary.innerHTML =
-        `<button type="button" class="outstanding-card active" style="border-left-color:${escapeHtml(accentColor)};" onclick="navigateOutstanding('${escapeHtml(currentMapId)}', '${escapeHtml(selected)}')"><span class="outstanding-count">${selectedPins.length}</span><span class="outstanding-label">${escapeHtml(selectedName)} total outstanding${deptBreakdown ? `<br>${deptBreakdown}` : ""}<br><small>Open items by map/building below</small></span></button>` +
+        `<div class="outstanding-navigator-title">Outstanding by Map / Building • ${selectedPins.length} active${deptBreakdown ? ` • ${deptBreakdown}` : ""}</div>` +
         buildOutstandingMapCards(countsByMap, selected);
     }
 
@@ -9265,8 +9316,10 @@
       const activeVisible = list.filter(pin => getPinStatus(pin) === "active").length;
       const deptName = getDepartmentViewName(categoryValue);
       const statusText = statusValue === "active" ? `${activeVisible} active visible` : `${activeVisible} active in view`;
-      activeCountCheck.textContent = `${deptName} • ${statusText}`;
-      activeCountCheck.title = `${deptName}: ${activeVisible} active pin${activeVisible === 1 ? "" : "s"} visible on ${getMapView(currentMapId).name}`;
+      const baseLabel = `${deptName} • ${statusText}`;
+      activeCountCheck.dataset.baseLabel = baseLabel;
+      updateActiveCountNavigatorLabel();
+      activeCountCheck.setAttribute("aria-label", `${baseLabel}. Tap to view outstanding items by map or building.`);
     }
 
     function applyFilters() {
@@ -13293,6 +13346,7 @@ ${rows.map(pin => `
     window.closeAllMapPopups = closeAllMapPopups;
     window.navigateLogPin = navigateLogPin;
     window.navigateOutstanding = navigateOutstanding;
+    window.toggleOutstandingNavigator = toggleOutstandingNavigator;
     window.exportClearLogHtml = exportClearLogHtml;
     window.printAllLogs = printAllLogs;
     window.printActiveLogs = printActiveLogs;
